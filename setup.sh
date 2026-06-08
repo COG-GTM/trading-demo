@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
+# Resolve the directory this script lives in
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 echo "=== Centrica Trading Demo — Database Setup ==="
 
 # Install PostgreSQL
@@ -23,10 +26,10 @@ sudo -u postgres psql -c "ALTER USER centrica_demo CREATEDB;"
 
 # Load schema and data
 echo "[4/5] Loading schema..."
-sudo -u postgres psql -d centrica_trading -f schema.sql
+cat "$SCRIPT_DIR/schema.sql" | sudo -u postgres psql -d centrica_trading
 
 echo "[4/5] Loading seed data (this may take a moment)..."
-sudo -u postgres psql -d centrica_trading -f seed_data.sql
+cat "$SCRIPT_DIR/seed_data.sql" | sudo -u postgres psql -d centrica_trading
 
 # Grant permissions
 echo "[5/5] Granting permissions..."
