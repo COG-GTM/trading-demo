@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Centrica Energy · LNG Cargo Arbitrage</title>
+<style>
+  :root {
+    --bg: #060f18; --panel: #0d1b2a; --panel2: #0e1c2c; --line: #1b2c40;
+    --ink: #e8f1fa; --muted: #8aa0b6; --blue: #3aa6ff; --teal: #33c0a8;
+    --amber: #f5a623; --red: #ff4d4d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: radial-gradient(1200px 600px at 70% -10%, #0d2236 0%, #060f18 60%);
+    color: var(--ink); font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 22px 22px 48px; }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border: 1px solid var(--line); border-radius: 14px;
+    background: linear-gradient(180deg, #0e2236, #0a1828);
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .logo {
+    width: 38px; height: 38px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--blue), var(--teal));
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; color: #06121f; font-size: 18px;
+  }
+  .brand h1 { font-size: 18px; margin: 0; letter-spacing: .2px; }
+  .brand .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .asof { text-align: right; font-size: 12px; color: var(--muted); }
+  .asof b { display: block; font-size: 15px; color: var(--ink); }
+
+  .grid-kpi { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 16px 0; }
+  .kpi {
+    border: 1px solid var(--line); border-radius: 13px; padding: 15px 16px;
+    background: linear-gradient(180deg, #0e1d2d, #0a1622); position: relative; overflow: hidden;
+  }
+  .kpi::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--teal); }
+  .kpi-warn::before { background: var(--amber); }
+  .kpi-alert::before { background: var(--red); }
+  .kpi-label { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+  .kpi-value { font-size: 30px; font-weight: 800; margin: 7px 0 3px; }
+  .kpi-alert .kpi-value { color: var(--red); }
+  .kpi-warn .kpi-value { color: var(--amber); }
+  .kpi-sub { font-size: 11.5px; color: var(--muted); }
+
+  .panel {
+    border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px;
+    background: linear-gradient(180deg, #0c1a29, #091420); margin-bottom: 16px;
+  }
+  .panel h2 { font-size: 14px; margin: 0 0 12px; font-weight: 700; letter-spacing: .3px; }
+  .panel h2 span { color: var(--muted); font-weight: 500; font-size: 12px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    text-align: left; color: var(--muted); font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: .5px; padding: 6px 10px; border-bottom: 1px solid var(--line);
+  }
+  tbody td { padding: 9px 10px; border-bottom: 1px solid #112030; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.mono { font-family: ui-monospace, 'SF Mono', Menlo, monospace; color: var(--blue); }
+  td.strong { font-weight: 800; }
+  tr.hero { background: rgba(255,77,77,.08); }
+  tr.hero td.strong { color: var(--red); }
+  .badge { font-size: 11px; padding: 3px 9px; border-radius: 20px; font-weight: 600; }
+  .badge-ok { background: rgba(51,192,168,.15); color: var(--teal); }
+  .badge-alert { background: rgba(255,77,77,.16); color: var(--red); }
+
+  .grid-anom { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .anomaly {
+    border: 1px solid var(--line); border-left: 3px solid var(--red); border-radius: 11px;
+    padding: 13px 15px; background: linear-gradient(180deg, #0e1a27, #0a141f);
+  }
+  .anomaly-head { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+  .anomaly-num {
+    width: 22px; height: 22px; border-radius: 6px; background: rgba(255,77,77,.18);
+    color: var(--red); font-weight: 800; font-size: 12px;
+    display: flex; align-items: center; justify-content: center; flex: none;
+  }
+  .anomaly-title { font-weight: 700; font-size: 13.5px; }
+  .anomaly-metric { margin-left: auto; color: var(--red); font-weight: 800; font-size: 13.5px; white-space: nowrap; }
+  .anomaly-body { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+  .footnote { color: #5a7088; font-size: 11px; margin-top: 18px; text-align: center; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo">C</div>
+        <div>
+          <h1>Centrica Energy · LNG Cargo Arbitrage</h1>
+          <div class="sub">LNG Trading desk (DESK_LNG) · cargo → cross-region arbitrage</div>
+        </div>
+      </div>
+      <div class="asof">As of<b>08 Jun 2026</b></div>
+    </div>
+
+    <div class="grid-kpi"><div class="kpi kpi-ok"><div class="kpi-label">In-transit cargoes</div><div class="kpi-value">7</div><div class="kpi-sub">LNG desk · live AIS</div></div><div class="kpi kpi-warn"><div class="kpi-label">Top diversion opportunity</div><div class="kpi-value">$6.3M</div><div class="kpi-sub">Arctic Voyager · CRG_0007</div></div><div class="kpi kpi-warn"><div class="kpi-label">Active anomalies</div><div class="kpi-value">4</div><div class="kpi-sub">see anomaly desk below</div></div><div class="kpi kpi-alert"><div class="kpi-label">JKM–TTF net arb (today)</div><div class="kpi-value">$2.61</div><div class="kpi-sub">vs $1.50 band · breached</div></div></div>
+
+    <div class="panel">
+      <h2>JKM–TTF Net Arbitrage <span>· last 30 trading days · $/MMBtu</span></h2>
+      <svg viewBox="0 0 920 320" width="100%" role="img" aria-label="JKM minus TTF net arbitrage, last 30 trading days"><line x1="56" y1="274.0" x2="896" y2="274.0" stroke="#1d2a3a" stroke-width="1"/><text x="48" y="278.0" text-anchor="end" fill="#6b8099" font-size="11">0.0</text><line x1="56" y1="232.0" x2="896" y2="232.0" stroke="#1d2a3a" stroke-width="1"/><text x="48" y="236.0" text-anchor="end" fill="#6b8099" font-size="11">0.5</text><line x1="56" y1="190.0" x2="896" y2="190.0" stroke="#1d2a3a" stroke-width="1"/><text x="48" y="194.0" text-anchor="end" fill="#6b8099" font-size="11">1.0</text><line x1="56" y1="148.0" x2="896" y2="148.0" stroke="#1d2a3a" stroke-width="1"/><text x="48" y="152.0" text-anchor="end" fill="#6b8099" font-size="11">1.5</text><line x1="56" y1="106.0" x2="896" y2="106.0" stroke="#1d2a3a" stroke-width="1"/><text x="48" y="110.0" text-anchor="end" fill="#6b8099" font-size="11">2.0</text><line x1="56" y1="64.0" x2="896" y2="64.0" stroke="#1d2a3a" stroke-width="1"/><text x="48" y="68.0" text-anchor="end" fill="#6b8099" font-size="11">2.5</text><line x1="56" y1="22.0" x2="896" y2="22.0" stroke="#1d2a3a" stroke-width="1"/><text x="48" y="26.0" text-anchor="end" fill="#6b8099" font-size="11">3.0</text><rect x="56" y="148.0" width="840" height="126.0" fill="#143b2e" opacity="0.55"/><line x1="56" y1="148.0" x2="896" y2="148.0" stroke="#33c08a" stroke-width="1.5" stroke-dasharray="6 4"/><text x="890" y="141.0" text-anchor="end" fill="#33c08a" font-size="11">$1.50 alert band</text><rect x="809.1" y="22" width="86.9" height="252" fill="#ff4d4d" opacity="0.10"/><text x="803.1" y="36" text-anchor="end" fill="#ff7a7a" font-size="11">spread dislocation ▶</text><polyline points="56.0,204.3 85.0,207.6 113.9,198.4 142.9,189.2 171.9,203.4 200.8,201.8 229.8,182.4 258.8,188.3 287.7,198.4 316.7,186.6 345.7,194.2 374.6,192.5 403.6,184.1 432.6,201.8 461.5,198.4 490.5,185.8 519.4,188.3 548.4,174.0 577.4,183.3 606.3,186.6 635.3,158.1 664.3,171.5 693.2,167.3 722.2,179.1 751.2,169.0 780.1,161.4 809.1,59.8" fill="none" stroke="#3aa6ff" stroke-width="2.5"/><polyline points="809.1,59.8 838.1,53.1 867.0,57.3 896.0,54.8" fill="none" stroke="#ff4d4d" stroke-width="2.5"/><circle cx="809.1" cy="59.8" r="3.2" fill="#ff4d4d"/><circle cx="838.1" cy="53.1" r="3.2" fill="#ff4d4d"/><circle cx="867.0" cy="57.3" r="3.2" fill="#ff4d4d"/><circle cx="896.0" cy="54.8" r="3.2" fill="#ff4d4d"/><circle cx="896.0" cy="54.8" r="5" fill="#ff4d4d" stroke="#fff" stroke-width="1.5"/><text x="887.0" y="59.8" text-anchor="end" fill="#ff9a9a" font-size="13" font-weight="800">$2.61</text><text x="56.0" y="292" text-anchor="middle" fill="#6b8099" font-size="10">28 Apr</text><text x="200.8" y="292" text-anchor="middle" fill="#6b8099" font-size="10">05 May</text><text x="345.7" y="292" text-anchor="middle" fill="#6b8099" font-size="10">12 May</text><text x="490.5" y="292" text-anchor="middle" fill="#6b8099" font-size="10">19 May</text><text x="635.3" y="292" text-anchor="middle" fill="#6b8099" font-size="10">26 May</text><text x="780.1" y="292" text-anchor="middle" fill="#6b8099" font-size="10">02 Jun</text><text x="896.0" y="292" text-anchor="middle" fill="#6b8099" font-size="10">08 Jun</text><text x="56" y="16" fill="#9fb3c8" font-size="11">$/MMBtu</text></svg>
+    </div>
+
+    <div class="panel">
+      <h2>Cargo Tracking <span>· in-transit positions by lat/lon, coloured by destination</span></h2>
+      <svg viewBox="0 0 920 360" width="100%" role="img" aria-label="Cargo tracking map"><rect x="8" y="8" width="904" height="344" rx="8" fill="#0b2238"/><line x1="8.0" y1="8" x2="8.0" y2="352" stroke="#123049" stroke-width="1"/><text x="8.0" y="348" text-anchor="middle" fill="#3f5e7a" font-size="9">-100°</text><line x1="98.4" y1="8" x2="98.4" y2="352" stroke="#123049" stroke-width="1"/><text x="98.4" y="348" text-anchor="middle" fill="#3f5e7a" font-size="9">-75°</text><line x1="188.8" y1="8" x2="188.8" y2="352" stroke="#123049" stroke-width="1"/><text x="188.8" y="348" text-anchor="middle" fill="#3f5e7a" font-size="9">-50°</text><line x1="279.2" y1="8" x2="279.2" y2="352" stroke="#123049" stroke-width="1"/><text x="279.2" y="348" text-anchor="middle" fill="#3f5e7a" font-size="9">-25°</text><line x1="369.6" y1="8" x2="369.6" y2="352" stroke="#123049" stroke-width="1"/><text x="369.6" y="348" text-anchor="middle" fill="#3f5e7a" font-size="9">0°</text><line x1="460.0" y1="8" x2="460.0" y2="352" stroke="#123049" stroke-width="1"/><text x="460.0" y="348" text-anchor="middle" fill="#3f5e7a" font-size="9">25°</text><line x1="550.4" y1="8" x2="550.4" y2="352" stroke="#123049" stroke-width="1"/><text x="550.4" y="348" text-anchor="middle" fill="#3f5e7a" font-size="9">50°</text><line x1="640.8" y1="8" x2="640.8" y2="352" stroke="#123049" stroke-width="1"/><text x="640.8" y="348" text-anchor="middle" fill="#3f5e7a" font-size="9">75°</text><line x1="731.2" y1="8" x2="731.2" y2="352" stroke="#123049" stroke-width="1"/><text x="731.2" y="348" text-anchor="middle" fill="#3f5e7a" font-size="9">100°</text><line x1="821.6" y1="8" x2="821.6" y2="352" stroke="#123049" stroke-width="1"/><text x="821.6" y="348" text-anchor="middle" fill="#3f5e7a" font-size="9">125°</text><line x1="912.0" y1="8" x2="912.0" y2="352" stroke="#123049" stroke-width="1"/><text x="912.0" y="348" text-anchor="middle" fill="#3f5e7a" font-size="9">150°</text><line x1="8" y1="352.0" x2="912" y2="352.0" stroke="#123049" stroke-width="1"/><text x="12" y="349.0" fill="#3f5e7a" font-size="9">0°</text><line x1="8" y1="272.6" x2="912" y2="272.6" stroke="#123049" stroke-width="1"/><text x="12" y="269.6" fill="#3f5e7a" font-size="9">15°</text><line x1="8" y1="193.2" x2="912" y2="193.2" stroke="#123049" stroke-width="1"/><text x="12" y="190.2" fill="#3f5e7a" font-size="9">30°</text><line x1="8" y1="113.8" x2="912" y2="113.8" stroke="#123049" stroke-width="1"/><text x="12" y="110.8" fill="#3f5e7a" font-size="9">45°</text><line x1="8" y1="34.5" x2="912" y2="34.5" stroke="#123049" stroke-width="1"/><text x="12" y="31.5" fill="#3f5e7a" font-size="9">60°</text><circle cx="206.9" cy="137.7" r="6" fill="#3aa6ff" stroke="#06121f" stroke-width="1.5"/><text x="206.9" y="125.7" text-anchor="middle" fill="#cdddee" font-size="10">★ Arctic Voyager</text><circle cx="297.3" cy="113.8" r="11" fill="none" stroke="#ff4d4d" stroke-width="2" stroke-dasharray="4 3"/><circle cx="297.3" cy="113.8" r="6" fill="#3aa6ff" stroke="#06121f" stroke-width="1.5"/><text x="297.3" y="101.8" text-anchor="middle" fill="#cdddee" font-size="10">Boston Express</text><circle cx="839.7" cy="193.2" r="6" fill="#f5a623" stroke="#06121f" stroke-width="1.5"/><text x="839.7" y="181.2" text-anchor="middle" fill="#cdddee" font-size="10">Gaslog Salem</text><circle cx="640.8" cy="288.5" r="6" fill="#f5a623" stroke="#06121f" stroke-width="1.5"/><text x="640.8" y="276.5" text-anchor="middle" fill="#cdddee" font-size="10">Al Rekayyat</text><circle cx="261.1" cy="129.7" r="6" fill="#3aa6ff" stroke="#06121f" stroke-width="1.5"/><text x="261.1" y="117.7" text-anchor="middle" fill="#cdddee" font-size="10">Mozah</text><circle cx="80.3" cy="272.6" r="6" fill="#f5a623" stroke="#06121f" stroke-width="1.5"/><text x="80.3" y="260.6" text-anchor="middle" fill="#cdddee" font-size="10">Maran Gas Apollo</text><circle cx="767.4" cy="325.5" r="11" fill="none" stroke="#ff4d4d" stroke-width="2" stroke-dasharray="4 3"/><circle cx="767.4" cy="325.5" r="6" fill="#f5a623" stroke="#06121f" stroke-width="1.5"/><text x="767.4" y="313.5" text-anchor="middle" fill="#cdddee" font-size="10">Sevilla Knutsen</text><g font-size="11" fill="#cdddee"><circle cx="22" cy="26" r="6" fill="#3aa6ff"/><text x="34" y="30">Europe-bound</text><circle cx="22" cy="48" r="6" fill="#f5a623"/><text x="34" y="52">Asia-bound</text><circle cx="22" cy="70" r="7" fill="none" stroke="#ff4d4d" stroke-width="2" stroke-dasharray="4 3"/><text x="34" y="74">Stale AIS</text></g></svg>
+    </div>
+
+    <div class="panel">
+      <h2>Top-5 Diversion Opportunities <span>· net arb × cargo volume</span></h2>
+      <table>
+        <thead><tr>
+          <th>Cargo</th><th>Vessel</th><th>Route</th>
+          <th class="num">Qty (MMBtu)</th><th class="num">Net arb $/MMBtu</th>
+          <th class="num">$ Opportunity</th><th>Status</th>
+        </tr></thead>
+        <tbody><tr class="hero"><td class="mono">CRG_0007</td><td>Arctic Voyager</td><td>US Gulf → Europe</td><td class="num">3.50M</td><td class="num">$1.80</td><td class="num strong">$6.3M</td><td><span class="badge badge-alert">Locked → EU</span></td></tr><tr class=""><td class="mono">CRG_0004</td><td>Boston Express</td><td>US Gulf → Europe</td><td class="num">3.62M</td><td class="num">$0.82</td><td class="num strong">$3.0M</td><td><span class="badge badge-ok">Divertible</span></td></tr><tr class=""><td class="mono">CRG_0006</td><td>Gaslog Salem</td><td>US Gulf → Asia</td><td class="num">3.62M</td><td class="num">$0.58</td><td class="num strong">$2.1M</td><td><span class="badge badge-ok">Divertible</span></td></tr><tr class=""><td class="mono">CRG_0001</td><td>Al Rekayyat</td><td>Middle East → Asia</td><td class="num">3.60M</td><td class="num">$0.45</td><td class="num strong">$1.6M</td><td><span class="badge badge-ok">Divertible</span></td></tr><tr class=""><td class="mono">CRG_0002</td><td>Mozah</td><td>US Gulf → Europe</td><td class="num">3.40M</td><td class="num">$0.26</td><td class="num strong">$0.9M</td><td><span class="badge badge-ok">Divertible</span></td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h2>Anomaly Desk <span>· 4 active exceptions</span></h2>
+      <div class="grid-anom"><div class="anomaly"><div class="anomaly-head"><span class="anomaly-num">1</span><span class="anomaly-title">Missed diversion arbitrage</span><span class="anomaly-metric">$6.3M</span></div><div class="anomaly-body">CRG_0007 (Arctic Voyager) is locked to Europe while Asia pays +$1.80/MMBtu. 3.50M MMBtu × $1.80 ≈ $6.3M left on the table.</div></div><div class="anomaly"><div class="anomaly-head"><span class="anomaly-num">2</span><span class="anomaly-title">Load-port concentration</span><span class="anomaly-metric">28.0% vs 20%</span></div><div class="anomaly-body">Sabine Pass accounts for 28.0% of in-transit volume — over the 20% single-load-port limit.</div></div><div class="anomaly"><div class="anomaly-head"><span class="anomaly-num">3</span><span class="anomaly-title">Stale AIS tracking</span><span class="anomaly-metric">2 cargoes</span></div><div class="anomaly-body">CRG_0004, CRG_0005 AIS positions frozen Jun 4 → Jun 8 (3+ trading days). Vessel location unknown / unverified.</div></div><div class="anomaly"><div class="anomaly-head"><span class="anomaly-num">4</span><span class="anomaly-title">Spread dislocation</span><span class="anomaly-metric">$2.61 vs $1.50</span></div><div class="anomaly-body">JKM–TTF net arb has blown past the $1.50 alert band to &gt;$2.50/MMBtu since 2026-06-03.</div></div></div>
+    </div>
+
+    <div class="footnote">
+      Synthetic demo data · deterministic (numpy seed=42) · generated from CARGO_ARBITRAGE_PLAN.md ·
+      conversion TTF$/MMBtu = (TTF€/MWh ÷ 3.412) × EURUSD(1.08)
+    </div>
+  </div>
+</body>
+</html>
