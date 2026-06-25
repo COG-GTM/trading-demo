@@ -28,7 +28,7 @@ AS_OF = dt.date(2026, 6, 8)
 AS_OF_LABEL = "08 Jun 2026"
 ALERT_BAND = 1.50           # $/MMBtu — net-arb dislocation alert band
 BREACH_START = dt.date(2026, 6, 3)
-NET_ARB_TODAY = 2.61        # $/MMBtu — JKM–TTF net arb, AS_OF
+NET_ARB_TODAY = 2.67        # $/MMBtu — JKM–TTF net arb, AS_OF (DB: 2.6714)
 EURUSD = 1.08
 MWH_TO_MMBTU = 3.412
 
@@ -52,25 +52,29 @@ def trading_days(end: dt.date, n: int) -> list[dt.date]:
 # 1. JKM–TTF net-arbitrage series (last 30 trading days)
 # ---------------------------------------------------------------------------
 def build_arb_series() -> list[dict]:
-    days = trading_days(AS_OF, 30)
+    # Exact JKM–TTF net-arb series from the seeded DB (arb_spreads.net_arb_usd).
+    # Calm baseline inside the $1.50 band, then the spread dislocates from
+    # 2026-06-02 onward, breaching hard (>$2.50) from 2026-06-03.
+    db_net_arb = [
+        (dt.date(2026, 4, 24), 1.0614), (dt.date(2026, 4, 27), 1.0351),
+        (dt.date(2026, 4, 28), 1.1746), (dt.date(2026, 4, 29), 1.2517),
+        (dt.date(2026, 4, 30), 1.1957), (dt.date(2026, 5, 1), 1.2128),
+        (dt.date(2026, 5, 4), 1.2364), (dt.date(2026, 5, 5), 1.2292),
+        (dt.date(2026, 5, 6), 1.0661), (dt.date(2026, 5, 7), 1.0361),
+        (dt.date(2026, 5, 8), 1.0175), (dt.date(2026, 5, 11), 0.8313),
+        (dt.date(2026, 5, 12), 0.8941), (dt.date(2026, 5, 13), 0.9118),
+        (dt.date(2026, 5, 14), 0.7714), (dt.date(2026, 5, 15), 0.8655),
+        (dt.date(2026, 5, 18), 0.8928), (dt.date(2026, 5, 19), 0.9361),
+        (dt.date(2026, 5, 20), 0.9842), (dt.date(2026, 5, 21), 1.0521),
+        (dt.date(2026, 5, 22), 1.0695), (dt.date(2026, 5, 25), 1.2138),
+        (dt.date(2026, 5, 26), 1.2237), (dt.date(2026, 5, 27), 1.2376),
+        (dt.date(2026, 5, 28), 1.2306), (dt.date(2026, 5, 29), 1.2535),
+        (dt.date(2026, 6, 1), 1.2000), (dt.date(2026, 6, 2), 1.8000),
+        (dt.date(2026, 6, 3), 2.6910), (dt.date(2026, 6, 4), 2.7033),
+        (dt.date(2026, 6, 5), 2.8120), (dt.date(2026, 6, 8), 2.6714),
+    ]
     rows = []
-    # Gentle upward drift; stays mostly inside the $1.50 band early, then the
-    # spread dislocates and breaches hard from 2026-06-03.
-    base = np.linspace(0.78, 1.42, len(days))
-    noise = np.random.normal(0.0, 0.11, len(days))
-    for i, d in enumerate(days):
-        if d >= BREACH_START:
-            # Breach region: net arb blows past the band, rising above $2.50.
-            ramp = {
-                dt.date(2026, 6, 3): 2.55,
-                dt.date(2026, 6, 4): 2.63,
-                dt.date(2026, 6, 5): 2.58,
-                dt.date(2026, 6, 8): NET_ARB_TODAY,
-            }
-            net = ramp[d]
-        else:
-            net = round(float(base[i] + noise[i]), 4)
-            net = max(0.45, min(net, 1.62))
+    for d, net in db_net_arb:
         # Reconstruct plausible JKM / TTF legs around the net arb.
         ttf_usd = round(11.40 + float(np.random.normal(0, 0.18)), 4)
         freight_regas_delta = 0.62  # freight_asia − freight_europe + regas delta
@@ -95,38 +99,41 @@ def build_arb_series() -> list[dict]:
 # 2. Cargoes in transit (map + concentration + diversion table)
 # ---------------------------------------------------------------------------
 def build_cargoes() -> list[dict]:
-    # qty in MMBtu; lat/lon are mid-voyage AIS snapshots.
-    # Hero cargo CRG_0007 (Arctic Voyager) is locked to Europe while Asia pays
-    # +$1.80/MMBtu → 1.80 × 3.5M ≈ $6.3M left on the table.
+    # qty in MMBtu; lat/lon are latest mid-voyage AIS snapshots.
+    # Mirrors the seeded DB exactly (cargos + latest cargo_positions): cargo_id,
+    # vessel, load_port, load_region, discharge_region, qty_mmbtu,
+    # destination_locked, latest AIS lat/lon/status. net_arb is the per-cargo
+    # divert-to-Asia uplift used for the opportunity ranking; the hero CRG_0007
+    # carries the $1.80/MMBtu × 3.5M ≈ $6.3M figure validated in the DB.
     cargoes = [
         dict(cargo_id="CRG_0007", vessel="Arctic Voyager", charterer="Shell Energy",
              load_port="Sabine Pass", load_region="US Gulf", discharge_region="Europe",
              qty=3_500_000, net_arb=1.80, locked=True, ais="live",
-             lat=40.5, lon=-45.0, status="in_transit"),
-        dict(cargo_id="CRG_0004", vessel="Boston Express", charterer="Vitol",
+             lat=43.17571, lon=-34.95524, status="in_transit"),
+        dict(cargo_id="CRG_0004", vessel="Nordic Aurora", charterer="Vitol",
+             load_port="Cameron", load_region="US Gulf", discharge_region="Europe",
+             qty=4_200_000, net_arb=0.82, locked=False, ais="live",
+             lat=46.03500, lon=-22.35500, status="in_transit"),
+        dict(cargo_id="CRG_0001", vessel="Boreal Trader", charterer="Shell Energy",
+             load_port="Sabine Pass", load_region="US Gulf", discharge_region="Europe",
+             qty=3_000_000, net_arb=0.58, locked=False, ais="live",
+             lat=46.02000, lon=-22.49250, status="in_transit"),
+        dict(cargo_id="CRG_0006", vessel="Atlantic Crown", charterer="TotalEnergies",
              load_port="Corpus Christi", load_region="US Gulf", discharge_region="Europe",
-             qty=3_620_000, net_arb=0.82, locked=False, ais="stale",
-             lat=45.0, lon=-20.0, status="in_transit"),
-        dict(cargo_id="CRG_0006", vessel="Gaslog Salem", charterer="TotalEnergies",
-             load_port="Freeport", load_region="US Gulf", discharge_region="Asia",
-             qty=3_620_000, net_arb=0.58, locked=False, ais="live",
-             lat=30.0, lon=130.0, status="in_transit"),
-        dict(cargo_id="CRG_0001", vessel="Al Rekayyat", charterer="QatarEnergy",
+             qty=2_800_000, net_arb=0.45, locked=False, ais="live",
+             lat=44.25522, lon=-28.74217, status="in_transit"),
+        dict(cargo_id="CRG_0002", vessel="Pacific Lantern", charterer="QatarEnergy",
+             load_port="Corpus Christi", load_region="US Gulf", discharge_region="Asia",
+             qty=2_800_000, net_arb=0.26, locked=False, ais="live",
+             lat=32.56300, lon=68.00700, status="in_transit"),
+        dict(cargo_id="CRG_0003", vessel="Gulf Mariner", charterer="QatarEnergy",
              load_port="Ras Laffan", load_region="Middle East", discharge_region="Asia",
-             qty=3_600_000, net_arb=0.45, locked=False, ais="live",
-             lat=12.0, lon=75.0, status="in_transit"),
-        dict(cargo_id="CRG_0002", vessel="Mozah", charterer="QatarEnergy",
-             load_port="Calcasieu Pass", load_region="US Gulf", discharge_region="Europe",
-             qty=3_400_000, net_arb=0.26, locked=False, ais="live",
-             lat=42.0, lon=-30.0, status="in_transit"),
-        dict(cargo_id="CRG_0003", vessel="Maran Gas Apollo", charterer="Shell Energy",
-             load_port="Sabine Pass", load_region="US Gulf", discharge_region="Asia",
-             qty=3_400_000, net_arb=0.18, locked=False, ais="live",
-             lat=15.0, lon=-80.0, status="in_transit"),
-        dict(cargo_id="CRG_0005", vessel="Sevilla Knutsen", charterer="RWE Supply",
-             load_port="Cameron", load_region="US Gulf", discharge_region="Asia",
-             qty=3_500_000, net_arb=0.12, locked=False, ais="stale",
-             lat=5.0, lon=110.0, status="in_transit"),
+             qty=3_500_000, net_arb=0.18, locked=False, ais="stale",
+             lat=30.50588, lon=97.81765, status="in_transit"),
+        dict(cargo_id="CRG_0005", vessel="Equatorial Star", charterer="RWE Supply",
+             load_port="Freeport", load_region="US Gulf", discharge_region="Asia",
+             qty=3_100_000, net_arb=0.12, locked=False, ais="stale",
+             lat=32.27353, lon=42.46059, status="in_transit"),
     ]
     for c in cargoes:
         c["opportunity"] = c["net_arb"] * c["qty"]
