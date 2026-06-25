@@ -92,10 +92,15 @@ def main() -> int:
         "THEN qty_mmbtu ELSE 0 END) / SUM(qty_mmbtu), 2) "
         "FROM cargos WHERE status = 'in_transit';"
     ))
-    a2_ok = 27.0 <= sabine_pct <= 29.0 and sabine_pct > 20.0
+    top_port = scalar(
+        "SELECT load_port FROM cargos WHERE status = 'in_transit' "
+        "GROUP BY load_port ORDER BY SUM(qty_mmbtu) DESC LIMIT 1;"
+    )
+    a2_ok = 27.0 <= sabine_pct <= 29.0 and sabine_pct > 20.0 and top_port == "Sabine Pass"
     c.report(
         "A2 Load-port concentration", a2_ok,
-        f"Sabine Pass = {sabine_pct:.1f}% of in-transit volume (limit 20%)",
+        f"Sabine Pass = {sabine_pct:.1f}% of in-transit volume (limit 20%); "
+        f"top load port = {top_port}",
     )
 
     # --- A3: Stale AIS (2 cargoes frozen Jun 4 → 8) ----------------------

@@ -238,11 +238,11 @@ DISCHARGE_COORDS = {"Europe": (51.45, 1.30), "Asia": (34.60, 138.90)}
 #  discharge_port, status, destination_locked, load_date, eta, qty_mmbtu, stale)
 CARGOS = [
     ("CRG_0001", "VSL_001", "CP_004", "Sabine Pass",    "US Gulf",     "Europe", None,           "in_transit", False, dt.date(2026,5,24), dt.date(2026,6,13), 3_000_000.00, False),
-    ("CRG_0002", "VSL_002", "CP_027", "Corpus Christi", "US Gulf",     "Asia",   None,           "in_transit", False, dt.date(2026,5,18), dt.date(2026,6,17), 3_400_000.00, False),
-    ("CRG_0003", "VSL_003", "CP_028", "Ras Laffan",     "Middle East", "Asia",   None,           "in_transit", False, dt.date(2026,5,26), dt.date(2026,6,12), 3_000_000.00, True),
-    ("CRG_0004", "VSL_004", "CP_009", "Cameron",        "US Gulf",     "Europe", None,           "in_transit", False, dt.date(2026,5,21), dt.date(2026,6,14), 3_600_000.00, False),
+    ("CRG_0002", "VSL_002", "CP_027", "Corpus Christi", "US Gulf",     "Asia",   None,           "in_transit", False, dt.date(2026,5,18), dt.date(2026,6,17), 2_800_000.00, False),
+    ("CRG_0003", "VSL_003", "CP_028", "Ras Laffan",     "Middle East", "Asia",   None,           "in_transit", False, dt.date(2026,5,26), dt.date(2026,6,12), 3_500_000.00, True),
+    ("CRG_0004", "VSL_004", "CP_009", "Cameron",        "US Gulf",     "Europe", None,           "in_transit", False, dt.date(2026,5,21), dt.date(2026,6,14), 4_200_000.00, False),
     ("CRG_0005", "VSL_005", "CP_030", "Freeport",       "US Gulf",     "Asia",   None,           "in_transit", False, dt.date(2026,5,15), dt.date(2026,6,18), 3_100_000.00, True),
-    ("CRG_0006", "VSL_006", "CP_010", "Corpus Christi", "US Gulf",     "Europe", None,           "in_transit", False, dt.date(2026,5,23), dt.date(2026,6,15), 3_300_000.00, False),
+    ("CRG_0006", "VSL_006", "CP_010", "Corpus Christi", "US Gulf",     "Europe", None,           "in_transit", False, dt.date(2026,5,23), dt.date(2026,6,15), 2_800_000.00, False),
     ("CRG_0007", "VSL_007", "CP_004", "Sabine Pass",    "US Gulf",     "Europe", "Isle of Grain","in_transit", True,  dt.date(2026,5,26), dt.date(2026,6,16), 3_500_000.00, False),
     ("CRG_0008", "VSL_008", "CP_025", "Sabine Pass",    "US Gulf",     "Europe", "Zeebrugge",    "discharged", True,  dt.date(2026,4,28), dt.date(2026,5,18), 3_200_000.00, False),
     ("CRG_0009", "VSL_009", "CP_016", "Cameron",        "US Gulf",     "Asia",   "Futtsu",       "discharged", True,  dt.date(2026,4,22), dt.date(2026,5,21), 3_700_000.00, False),
