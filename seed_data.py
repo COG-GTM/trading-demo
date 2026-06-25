@@ -12,12 +12,20 @@ Anomalies embedded:
   3. Continental Gas desk: 2 stale marks (positions not revalued for 3 trading days)
   4. Carbon desk: VaR breach — £4.2M vs £3.5M limit
 
+LNG cargo → cross-region arbitrage anomalies:
+  A1. Missed diversion arb: CRG_0007 (Arctic Voyager) locked to Europe while
+      Asia net arb = $1.80/MMBtu on 3.5M MMBtu ⇒ ~$6.3M left on the table
+  A2. Load-port concentration: Sabine Pass ≈ 28% of in-transit volume (20% limit)
+  A3. Stale AIS: 2 cargoes frozen Jun 4 → 8 (ais_status='stale')
+  A4. Spread dislocation: net_arb past the $1.50 band to >$2.50/MMBtu from Jun 3
+
 Usage:
     python seed_data.py          # writes seed_data.sql
 """
 from __future__ import annotations
 
 import datetime as dt
+import math
 import numpy as np
 from pathlib import Path
 
@@ -181,6 +189,68 @@ DESK_RISK = {
     "DESK_REN": {"var_base": 800_000,   "var_limit": 1_500_000, "conc_limit": 25.0},
     "DESK_CRB": {"var_base": 2_500_000, "var_limit": 3_500_000, "conc_limit": 20.0},
 }
+
+# ---------------------------------------------------------------------------
+# LNG cargo → cross-region arbitrage config
+# ---------------------------------------------------------------------------
+# Unit math (see Knowledge note 07-arb-economics):
+#   TTF_usd_per_mmbtu = (TTF_eur_per_mwh / 3.412) * EURUSD   (1 MWh = 3.412 MMBtu)
+#   gross_arb = JKM_usd - TTF_usd
+#   net_arb   = gross_arb - (freight_asia - freight_europe) - regas_delta
+EURUSD            = 1.08
+MWH_PER_MMBTU     = 3.412
+FREIGHT_ASIA_USD  = 1.20     # $/MMBtu, US Gulf → Asia (longer voyage)
+FREIGHT_EUROPE_USD = 0.80    # $/MMBtu, US Gulf → Europe
+REGAS_DELTA_USD   = 0.30     # $/MMBtu regas cost differential
+FREIGHT_DELTA_USD = FREIGHT_ASIA_USD - FREIGHT_EUROPE_USD   # 0.40
+ALERT_BAND_USD    = 1.50     # net-arb alert band; sustained breach ⇒ dislocation
+
+ARB_DISLOCATION_START = dt.date(2026, 6, 3)   # Anomaly A4: net_arb > $2.50 from here
+HERO_REF_DATE         = dt.date(2026, 6, 2)   # Anomaly A1: Asia net_arb = $1.80 reference
+AIS_STALE_FREEZE_DATE = dt.date(2026, 6, 4)   # Anomaly A3: AIS frozen Jun 4 → 8
+
+# Vessels (reference table; charterer maps to a counterparty name)
+VESSELS = [
+    ("VSL_001", "Boreal Trader",     "311021300", 174000, "Shell Energy",          "Bahamas"),
+    ("VSL_002", "Pacific Lantern",   "311021301", 180000, "JERA",                  "Marshall Islands"),
+    ("VSL_003", "Gulf Mariner",      "311021302", 266000, "Korea Gas Corporation", "Qatar"),
+    ("VSL_004", "Nordic Aurora",     "311021303", 174000, "Equinor",               "Norway"),
+    ("VSL_005", "Equatorial Star",   "311021304", 160000, "Pavilion Energy",       "Singapore"),
+    ("VSL_006", "Atlantic Crown",    "311021305", 174000, "TotalEnergies Trading", "France"),
+    ("VSL_007", "Arctic Voyager",    "311021306", 145000, "Shell Energy",          "Bahamas"),
+    ("VSL_008", "Iberian Breeze",    "311021307", 174000, "Naturgy",               "Spain"),
+    ("VSL_009", "Coral Endeavour",   "311021308", 210000, "Mercuria Energy",       "Malta"),
+    ("VSL_010", "Meridian Spirit",   "311021309", 180000, "Trafigura",             "Singapore"),
+]
+
+# Approx (lat, lon) for AIS path interpolation
+LOAD_COORDS = {
+    "Sabine Pass":     (29.73, -93.87),
+    "Corpus Christi":  (27.81, -97.41),
+    "Cameron":         (29.79, -93.32),
+    "Freeport":        (28.95, -95.31),
+    "Ras Laffan":      (25.90,  51.60),
+}
+DISCHARGE_COORDS = {"Europe": (51.45, 1.30), "Asia": (34.60, 138.90)}
+
+# Cargo specs.  CRG_0001-0007 are in_transit (get daily AIS positions).
+# (cargo_id, vessel_id, cp_id, load_port, load_region, discharge_region,
+#  discharge_port, status, destination_locked, load_date, eta, qty_mmbtu, stale)
+CARGOS = [
+    ("CRG_0001", "VSL_001", "CP_004", "Sabine Pass",    "US Gulf",     "Europe", None,           "in_transit", False, dt.date(2026,5,24), dt.date(2026,6,13), 3_000_000.00, False),
+    ("CRG_0002", "VSL_002", "CP_027", "Corpus Christi", "US Gulf",     "Asia",   None,           "in_transit", False, dt.date(2026,5,18), dt.date(2026,6,17), 3_400_000.00, False),
+    ("CRG_0003", "VSL_003", "CP_028", "Ras Laffan",     "Middle East", "Asia",   None,           "in_transit", False, dt.date(2026,5,26), dt.date(2026,6,12), 3_000_000.00, True),
+    ("CRG_0004", "VSL_004", "CP_009", "Cameron",        "US Gulf",     "Europe", None,           "in_transit", False, dt.date(2026,5,21), dt.date(2026,6,14), 3_600_000.00, False),
+    ("CRG_0005", "VSL_005", "CP_030", "Freeport",       "US Gulf",     "Asia",   None,           "in_transit", False, dt.date(2026,5,15), dt.date(2026,6,18), 3_100_000.00, True),
+    ("CRG_0006", "VSL_006", "CP_010", "Corpus Christi", "US Gulf",     "Europe", None,           "in_transit", False, dt.date(2026,5,23), dt.date(2026,6,15), 3_300_000.00, False),
+    ("CRG_0007", "VSL_007", "CP_004", "Sabine Pass",    "US Gulf",     "Europe", "Isle of Grain","in_transit", True,  dt.date(2026,5,26), dt.date(2026,6,16), 3_500_000.00, False),
+    ("CRG_0008", "VSL_008", "CP_025", "Sabine Pass",    "US Gulf",     "Europe", "Zeebrugge",    "discharged", True,  dt.date(2026,4,28), dt.date(2026,5,18), 3_200_000.00, False),
+    ("CRG_0009", "VSL_009", "CP_016", "Cameron",        "US Gulf",     "Asia",   "Futtsu",       "discharged", True,  dt.date(2026,4,22), dt.date(2026,5,21), 3_700_000.00, False),
+    ("CRG_0010", "VSL_010", "CP_003", "Corpus Christi", "US Gulf",     "Asia",   "Tianjin",      "diverted",   True,  dt.date(2026,5,2),  dt.date(2026,5,30), 3_400_000.00, False),
+    ("CRG_0011", "VSL_002", "CP_027", "Freeport",       "US Gulf",     "Asia",   None,           "loading",    False, dt.date(2026,6,6),  dt.date(2026,7,5),  3_300_000.00, False),
+    ("CRG_0012", "VSL_005", "CP_030", "Ras Laffan",     "Middle East", "Asia",   None,           "loading",    False, dt.date(2026,6,7),  dt.date(2026,6,27), 3_000_000.00, False),
+    ("CRG_0013", "VSL_004", "CP_009", "Cameron",        "US Gulf",     "Europe", None,           "loading",    False, dt.date(2026,6,8),  dt.date(2026,6,30), 3_600_000.00, False),
+]
 
 # ---------------------------------------------------------------------------
 # SQL escape helpers
@@ -455,6 +525,123 @@ class DataGen:
                     f"{esc(delta)}, {esc(gamma)}, {esc(vega)});"
                 )
 
+    # -----------------------------------------------------------------
+    # LNG cargo → cross-region arbitrage
+    # -----------------------------------------------------------------
+    def gen_vessels(self):
+        self.emit("\n-- Vessels (LNG carriers)")
+        for v in VESSELS:
+            vals = ", ".join(esc(x) for x in v)
+            self.emit(f"INSERT INTO vessels VALUES ({vals});")
+
+    def gen_cargos(self):
+        """LNG cargoes.  Anomaly A1 (CRG_0007 locked to Europe while Asia pays
+        more), A2 (Sabine Pass ≈ 28% of in-transit volume), A3 (2 cargoes with a
+        frozen last_ais_update)."""
+        self.emit("\n-- Cargos")
+        for (cargo_id, vessel_id, cp_id, load_port, load_region, discharge_region,
+             discharge_port, status, locked, load_date, eta, qty, stale) in CARGOS:
+            # Henry-Hub-linked purchase price + route-dependent freight/regas
+            purchase_price = round(9.50 + float(np.random.uniform(-0.8, 0.8)), 4)
+            base_freight = FREIGHT_ASIA_USD if discharge_region == "Asia" else FREIGHT_EUROPE_USD
+            freight = round(base_freight + float(np.random.uniform(-0.10, 0.10)), 4)
+            regas = round(REGAS_DELTA_USD + float(np.random.uniform(-0.05, 0.05)), 4)
+
+            if stale:
+                last_ais = dt.datetime.combine(AIS_STALE_FREEZE_DATE, dt.time(6, 0, 0))
+            elif status == "in_transit":
+                last_ais = dt.datetime.combine(AS_OF, dt.time(6, 0, 0))
+            elif status == "loading":
+                last_ais = dt.datetime.combine(load_date, dt.time(6, 0, 0))
+            else:  # discharged / diverted
+                last_ais = dt.datetime.combine(eta, dt.time(6, 0, 0))
+
+            self.emit(
+                f"INSERT INTO cargos VALUES ({esc(cargo_id)}, {esc(vessel_id)}, "
+                f"{esc(cp_id)}, {esc(load_port)}, {esc(load_region)}, "
+                f"{esc(discharge_region)}, {esc(discharge_port)}, {esc(status)}, "
+                f"{esc(locked)}, {esc(load_date)}, {esc(eta)}, {esc(qty)}, "
+                f"{esc(purchase_price)}, {esc(freight)}, {esc(regas)}, {esc(last_ais)});"
+            )
+
+    def gen_cargo_positions(self):
+        """Daily AIS snapshots for in-transit cargoes.  Anomaly A3: the 2 stale
+        cargoes have lat/lon/eta frozen at the Jun-4 snapshot from Jun 4 → 8."""
+        self.emit("\n-- Cargo Positions (daily AIS, in-transit cargoes)")
+
+        def bearing(a, b):
+            lat1, lon1 = map(math.radians, a)
+            lat2, lon2 = map(math.radians, b)
+            dlon = lon2 - lon1
+            x = math.sin(dlon) * math.cos(lat2)
+            y = (math.cos(lat1) * math.sin(lat2)
+                 - math.sin(lat1) * math.cos(lat2) * math.cos(dlon))
+            return round((math.degrees(math.atan2(x, y)) + 360) % 360, 1)
+
+        for idx, c in enumerate(CARGOS):
+            (cargo_id, vessel_id, cp_id, load_port, load_region, discharge_region,
+             discharge_port, status, locked, load_date, eta, qty, stale) = c
+            if status != "in_transit":
+                continue
+            load_xy = LOAD_COORDS[load_port]
+            disc_xy = DISCHARGE_COORDS[discharge_region]
+            hdg = bearing(load_xy, disc_xy)
+            voyage_days = max((eta - load_date).days, 1)
+
+            for day in ALL_DAYS_30:
+                eff_date = day
+                ais_status = "live"
+                if stale and day >= AIS_STALE_FREEZE_DATE:
+                    eff_date = AIS_STALE_FREEZE_DATE   # freeze position/eta
+                    ais_status = "stale"
+                dit = max((eff_date - load_date).days, 0)
+                frac = min(dit / voyage_days, 1.0)
+                lat = round(load_xy[0] + frac * (disc_xy[0] - load_xy[0]), 5)
+                lon = round(load_xy[1] + frac * (disc_xy[1] - load_xy[1]), 5)
+                speed = round(14.5 + (idx % 3) * 0.7, 2) if 0.0 < frac < 1.0 else 0.0
+                self.emit(
+                    f"INSERT INTO cargo_positions (obs_date, cargo_id, lat, lon, "
+                    f"speed_knots, heading_deg, eta, dest_region, days_in_transit, "
+                    f"ais_status) VALUES ({esc(day)}, {esc(cargo_id)}, {esc(lat)}, "
+                    f"{esc(lon)}, {esc(speed)}, {esc(hdg)}, {esc(eta)}, "
+                    f"{esc(discharge_region)}, {esc(dit)}, {esc(ais_status)});"
+                )
+
+    def gen_arb_spreads(self):
+        """Daily JKM–TTF cross-region arb spread (chart-ready).  Anomaly A4: the
+        net arb blows past the $1.50 alert band to >$2.50/MMBtu from Jun 3.
+        The Jun-2 row is engineered to net_arb = $1.80 (the CRG_0007 reference)."""
+        self.emit("\n-- Arb Spreads (JKM–TTF cross-region, last 30 trading days)")
+        # TTF (€/MWh) follows the same random-walk logic as market_data; JKM is
+        # modelled as TTF_usd + the (engineered) net arb + freight/regas deltas so
+        # the JKM–TTF spread series stays formula-consistent and chart-ready.
+        ttf_eur = PRICE_RANGES["PRD_TTF"][0]   # 35.0
+        ttf_vol = 0.020
+
+        for i, day in enumerate(ALL_DAYS_30):
+            ttf_eur = round(ttf_eur * (1 + float(np.random.normal(0, ttf_vol))), 4)
+            ttf_usd = round((ttf_eur / MWH_PER_MMBTU) * EURUSD, 4)
+
+            # Baseline net arb sits calmly inside the $1.50 alert band ...
+            net = round(1.05 + 0.20 * math.sin(i / 3.0)
+                        + float(np.random.normal(0, 0.05)), 4)
+            # ... A1 reference: Jun-2 ticks up to exactly $1.80 (Asia) ...
+            if day == HERO_REF_DATE:
+                net = 1.80
+            # ... A4: from Jun-3 the spread dislocates well past $2.50.
+            elif day >= ARB_DISLOCATION_START:
+                net = round(2.65 + float(np.random.uniform(-0.10, 0.18)), 4)
+
+            jkm = round(ttf_usd + net + FREIGHT_DELTA_USD + REGAS_DELTA_USD, 4)
+            gross = round(jkm - ttf_usd, 4)
+            favored = "Asia" if net > 0 else "Europe"
+            self.emit(
+                f"INSERT INTO arb_spreads (obs_date, jkm_usd_mmbtu, ttf_usd_mmbtu, "
+                f"gross_arb_usd, net_arb_usd, favored_region, alert_band_usd) VALUES ("
+                f"{esc(day)}, {esc(jkm)}, {esc(ttf_usd)}, {esc(gross)}, {esc(net)}, "
+                f"{esc(favored)}, {esc(ALERT_BAND_USD)});"
+            )
+
     def write_sql(self, path: str):
         with open(path, "w") as f:
             f.write("-- Auto-generated synthetic data (seed=42). DO NOT EDIT.\n")
@@ -470,11 +657,19 @@ class DataGen:
         n_pnl = sum(1 for l in self.sql_lines if l.startswith("INSERT INTO daily_pnl"))
         n_risk = sum(1 for l in self.sql_lines if l.startswith("INSERT INTO risk_metrics"))
         n_market = sum(1 for l in self.sql_lines if l.startswith("INSERT INTO market_data"))
-        print(f"  trades:       {n_trades}")
-        print(f"  positions:    {n_positions}")
-        print(f"  daily_pnl:    {n_pnl}")
-        print(f"  risk_metrics: {n_risk}")
-        print(f"  market_data:  {n_market}")
+        n_vessels = sum(1 for l in self.sql_lines if l.startswith("INSERT INTO vessels"))
+        n_cargos = sum(1 for l in self.sql_lines if l.startswith("INSERT INTO cargos"))
+        n_cargo_pos = sum(1 for l in self.sql_lines if l.startswith("INSERT INTO cargo_positions"))
+        n_arb = sum(1 for l in self.sql_lines if l.startswith("INSERT INTO arb_spreads"))
+        print(f"  trades:          {n_trades}")
+        print(f"  positions:       {n_positions}")
+        print(f"  daily_pnl:       {n_pnl}")
+        print(f"  risk_metrics:    {n_risk}")
+        print(f"  market_data:     {n_market}")
+        print(f"  vessels:         {n_vessels}")
+        print(f"  cargos:          {n_cargos}")
+        print(f"  cargo_positions: {n_cargo_pos}")
+        print(f"  arb_spreads:     {n_arb}")
 
 
 def main():
@@ -488,6 +683,10 @@ def main():
     gen.gen_positions()
     gen.gen_daily_pnl()
     gen.gen_risk_metrics()
+    gen.gen_vessels()
+    gen.gen_cargos()
+    gen.gen_cargo_positions()
+    gen.gen_arb_spreads()
 
     out = Path(__file__).parent / "seed_data.sql"
     gen.write_sql(str(out))
