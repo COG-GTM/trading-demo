@@ -1,0 +1,52 @@
+// trading-demo architecture: schema + seed generator -> PostgreSQL -> analysis, validation, dashboard.
+// Edit this file, then run ./render.sh to regenerate architecture.png and architecture.svg.
+digraph trading_demo {
+  graph [rankdir=TB, fontname="DejaVu Sans", fontsize=18, labelloc=t, nodesep=0.45, ranksep=0.55, pad=0.3,
+         label="trading-demo — synthetic Centrica energy-trading dataset (default branch: main)"];
+  node  [shape=box, style="rounded,filled", fontname="DejaVu Sans", fontsize=16, fillcolor=white, color="#4a5a6a"];
+  edge  [fontname="DejaVu Sans", fontsize=13, color="#4a5a6a"];
+
+  subgraph cluster_build {
+    label="Build time · Python 3 + numpy (seed 42, deterministic)"; style="rounded,filled"; fillcolor="#eef4fb"; color="#7aa6d6";
+    seed_py  [label="seed_data.py\nconstants: desks, traders, products,\nvessels, CARGOS, arb economics\n+ 8 seeded anomalies"];
+    gen_py   [label="dashboard/generate.py\ncargo + JKM–TTF series hard-coded\n(mirrors seeded DB values)"];
+    {rank=same; seed_py; gen_py;}
+  }
+
+  subgraph cluster_repo {
+    label="Committed artifacts"; style="rounded,filled"; fillcolor="#f6f6f6"; color="#9a9a9a";
+    schema   [label="schema.sql\nDDL: 13 tables + indexes", shape=note, fillcolor="#fffbe6"];
+    seed_sql [label="seed_data.sql\n4,314 INSERTs in one transaction", shape=note, fillcolor="#fffbe6"];
+    html     [label="dashboard/index.html\nself-contained, inline SVG charts,\nno network calls / no backend", shape=note, fillcolor="#fffbe6"];
+    {rank=same; schema; seed_sql; html;}
+  }
+
+  setup [label="setup.sh  (Debian/Ubuntu, sudo)\napt install postgresql · drop + recreate\ncentrica_trading / centrica_demo · load SQL", fillcolor="#e8f6ee", color="#3e9a68"];
+
+  subgraph cluster_db {
+    label="PostgreSQL · database centrica_trading · role centrica_demo"; style="rounded,filled"; fillcolor="#f3eefb"; color="#8a6cc4";
+    core [label="Trading core\ndesks · traders · counterparties · products\ntrades · positions · daily_pnl\nrisk_metrics · market_data"];
+    lng  [label="LNG cargo → cross-region arbitrage\nvessels · cargos · cargo_positions\narb_spreads (JKM–TTF net arb)"];
+    {rank=same; core; lng;}
+  }
+
+  subgraph cluster_use {
+    label="Consumers"; style="rounded,filled"; fillcolor="#fdf1e6"; color="#d08a3c";
+    analyst  [label="psql / DANA (Devin's Data Analyst)\nad-hoc SQL to discover anomalies 1–8"];
+    validate [label="validate_cargo.py\nshells out to psql ($CENTRICA_DSN)\nPASS/FAIL for cargo anomalies A1–A4"];
+    browser  [label="Browser\nopen index.html offline"];
+    {rank=same; analyst; validate; browser;}
+  }
+
+  seed_py -> seed_sql [label="python seed_data.py"];
+  gen_py  -> html     [label="python dashboard/generate.py"];
+  schema  -> setup;
+  seed_sql -> setup;
+  setup -> core;
+  setup -> lng;
+  lng -> core [label="cargos.charterer_cp_id →\ncounterparties", style=dashed, constraint=false];
+  core -> analyst;
+  lng  -> analyst;
+  lng  -> validate [label="SQL checks"];
+  html -> browser;
+}
