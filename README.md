@@ -5,17 +5,34 @@ Synthetic energy-trading dataset for demonstrating **DANA** (Devin's Data Analys
 ## Quick Start
 
 ```bash
-# Generate seed data (if seed_data.sql doesn't exist)
+# (Optional) regenerate seed data — seed_data.sql is already committed and deterministic
 pip install numpy
 python seed_data.py
 
-# Set up PostgreSQL and load data
+# Install PostgreSQL and load the data (Debian/Ubuntu, needs sudo).
+# Drops and recreates the centrica_trading database and centrica_demo role.
 chmod +x setup.sh
 ./setup.sh
 
 # Connect
 psql postgresql://centrica_demo:demo_password@localhost:5432/centrica_trading
+
+# Check the four LNG cargo anomalies (override the DSN with CENTRICA_DSN if
+# PostgreSQL is not on localhost:5432)
+python validate_cargo.py
+
+# LNG arbitrage dashboard: open the committed static page in a browser
+# (no database or network needed); regenerate it with:
+python dashboard/generate.py
 ```
+
+## Architecture
+
+See [docs/architecture.md](docs/architecture.md) for components, data model and flows.
+
+![trading-demo architecture](docs/diagrams/architecture.png)
+
+Diagram source: [docs/diagrams/architecture.dot](docs/diagrams/architecture.dot) (Graphviz) · [SVG](docs/diagrams/architecture.svg) · re-render with `docs/diagrams/render.sh`.
 
 ## Schema
 
@@ -38,8 +55,8 @@ psql postgresql://centrica_demo:demo_password@localhost:5432/centrica_trading
 ## LNG Cargo → Cross-Region Arbitrage
 
 Layered on top of the trading data: LNG cargoes, their daily AIS positions, and a
-JKM–TTF cross-region arbitrage spread. The arb economics use the existing
-`market_data` JKM (`PRD_JKM`, $/MMBtu) and TTF (`PRD_TTF`, €/MWh) benchmarks:
+JKM–TTF cross-region arbitrage spread. The arb economics use the JKM ($/MMBtu)
+and TTF (€/MWh) benchmark units of `PRD_JKM` / `PRD_TTF`:
 
 ```
 TTF_usd_per_mmbtu = (TTF_eur_per_mwh / 3.412) * 1.08   -- MWh→MMBtu, EURUSD
@@ -48,7 +65,9 @@ net_arb           = gross_arb - (freight_asia - freight_europe) - regas_delta
 cargo_pnl_impact  = net_arb * cargo.qty_mmbtu
 ```
 
-`favored_region = 'Asia'` when `net_arb > 0`; the `alert_band_usd` ($1.50) flags a
+In the seed, `net_arb` is engineered per day and the `arb_spreads` JKM/TTF legs are
+derived from it with these formulas (freight delta $0.40, regas delta $0.30); they
+are not read from `market_data` rows. `favored_region = 'Asia'` when `net_arb > 0`; the `alert_band_usd` ($1.50) flags a
 spread dislocation when breached. Validate the cargo anomalies with
 `python validate_cargo.py` (prints PASS/FAIL per anomaly).
 
@@ -66,7 +85,7 @@ These are embedded in the data for the live demo. DANA should be able to discove
 - **Discoverable via:** `risk_metrics.max_counterparty_concentration_pct` vs `concentration_limit_pct`
 
 ### 3. Continental Gas Desk — Stale Marks
-- **What:** NBP Gas and TTF Gas positions have **unchanged market prices** from June 4–8 (3 trading days frozen at £83.50 and €36.50 respectively)
+- **What:** NBP Gas and TTF Gas positions have **unchanged market prices** from June 4–8 (3 trading days frozen at 83.50p/therm and €36.50/MWh respectively)
 - **Discoverable via:** `positions.market_price` unchanged across consecutive dates
 
 ### 4. Carbon Desk — VaR Breach
@@ -121,6 +140,10 @@ All data is generated with `numpy.random.seed(42)`. Running `python seed_data.py
 
 - `schema.sql` — PostgreSQL DDL
 - `seed_data.py` — Python data generator (requires `numpy`)
-- `seed_data.sql` — Generated INSERT statements (auto-created by `seed_data.py`)
-- `setup.sh` — One-command database setup script
-- `validate_cargo.py` — Asserts the 4 LNG cargo arbitrage anomalies reproduce
+- `seed_data.sql` — Generated INSERT statements (written by `seed_data.py`; committed)
+- `setup.sh` — One-command database setup script (Debian/Ubuntu, `sudo`)
+- `validate_cargo.py` — Asserts the 4 LNG cargo arbitrage anomalies reproduce (reads `CENTRICA_DSN`)
+- `dashboard/generate.py` — Builds the LNG cargo arbitrage dashboard (requires `numpy`; data hard-coded to mirror the seed, no DB connection)
+- `dashboard/index.html` — Generated self-contained dashboard (inline SVG, works offline)
+- `docs/architecture.md` — Architecture overview
+- `docs/diagrams/` — Graphviz source (`architecture.dot`), renders (`architecture.png`, `architecture.svg`) and `render.sh`
