@@ -16,8 +16,8 @@ Source: [`diagrams/architecture.dot`](diagrams/architecture.dot) (Graphviz). Reg
 | `setup.sh` | One-shot loader for Debian/Ubuntu: `apt-get install postgresql`, starts the service, **drops and recreates** database `centrica_trading` and role `centrica_demo` (password `demo_password`), loads `schema.sql` then `seed_data.sql` as the `postgres` superuser, then grants the demo role access. Needs `sudo`. |
 | PostgreSQL `centrica_trading` | The dataset analysts query. |
 | `validate_cargo.py` | Shells out to `psql` (no Python DB driver) against `$CENTRICA_DSN` (default `postgresql://centrica_demo:demo_password@localhost:5432/centrica_trading`) and prints PASS/FAIL for cargo anomalies A1–A4 (README anomalies 5–8); exits 1 if any fail. |
-| `dashboard/generate.py` | Writes `dashboard/index.html`. It does **not** connect to the database: the cargo list and the JKM–TTF net-arb series are hard-coded copies of the seeded values, and the JKM/TTF legs shown in the chart are reconstructed around the net arb with their own random draws. |
-| `dashboard/index.html` | Committed, self-contained page (inline CSS and SVG, no scripts, no external requests): KPI tiles, JKM–TTF net-arb chart with the $1.50 alert band, cargo tracking map, top-5 diversion opportunities, anomaly desk for A1–A4. |
+| `dashboard/generate.py` | Writes `dashboard/index.html`. It does **not** connect to the database: the cargo list and the JKM–TTF net-arb series are hard-coded copies of the seeded values. It also reconstructs JKM/TTF legs around the net arb with its own random draws, but the page plots only the net arb. |
+| `dashboard/index.html` | Committed, self-contained page (inline CSS and SVG, no scripts, no external requests): KPI tiles, JKM–TTF net-arb chart with the $1.50 alert band and breach shading from 2026-06-03 (the sustained >$2.50 dislocation), cargo tracking map, top-5 diversion opportunities, anomaly desk for A1–A4. |
 
 ## Data model
 
